@@ -147,6 +147,12 @@ function formatDateShort(date) {
   return date.toLocaleDateString("en-US", { month: "short", day: "2-digit" });
 }
 
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
 function isSameCalendarDay(a, b) {
   if (!a || !b) return false;
   return (
@@ -213,15 +219,9 @@ function buildDefaultState() {
   };
 }
 
-function addDays(date, days) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-}
-
-function buildWeeklyDayOptions() {
-  return [{ label: "Pick a day", value: "" }].concat(
-    WEEK_DAYS.map((day) => ({ label: day, value: day }))
+  function buildWeeklyDayOptions() {
+    return [{ label: "Pick a day", value: "" }].concat(
+      WEEK_DAYS.map((day) => ({ label: day, value: day }))
   );
 }
 
@@ -516,6 +516,7 @@ export default function App() {
   const today = new Date();
 
   const cashflowStart = new Date();
+  cashflowStart.setHours(0, 0, 0, 0);
   const cashflowEnd = new Date();
   cashflowEnd.setDate(cashflowStart.getDate() + cashflowDays);
   const cashflowToday =
@@ -1697,7 +1698,9 @@ No bank connections required. You can change everything later.</p>
                         const dateLabel = dateObj
                           ? isSameCalendarDay(dateObj, cashflowToday)
                             ? "Today"
-                            : formatDateShort(dateObj)
+                            : isSameCalendarDay(dateObj, addDays(cashflowToday, 1))
+                              ? "Tomorrow"
+                              : formatDateShort(dateObj)
                           : ev.date;
                         const debitBal = paidDebitBalanceMap.get(ev.date) ?? debitBalance;
                         const creditBal = paidCreditBalanceMap.get(ev.date) ?? creditBalance;
