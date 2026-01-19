@@ -30,6 +30,226 @@ function saveLocalState(next) {
   }
 }
 
+function normalizeDate(value) {
+  if (!value) return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === "string") {
+    const parsed = new Date(`${value}T00:00:00`);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return null;
+}
+
+function isoDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function occurrencesForEntry(entry, startDate, days, isIncome) {
+  const out = [];
+  const end = addDays(startDate, days);
+  const freq = String(entry?.frequency || "").toLowerCase();
+  const name = entry?.name || "";
+  const amt = Number(entry?.amount || 0);
+  const typ = String(entry?.type || "").trim().toLowerCase();
+  const sign = isIncome ? 1 : typ === "debit" ? -1 : 1;
+  const day = entry?.day;
+
+  if (freq.includes("biweekly")) {
+    const anchor = normalizeDate(day);
+    if (!anchor) return out;
+    let occ = anchor;
+    if (occ < startDate) {
+      const diff = Math.floor((startDate - occ) / (24 * 60 * 60 * 1000));
+      const k = Math.floor((diff + 13) / 14);
+      occ = addDays(occ, 14 * k);
+    }
+    while (occ <= end) {
+      out.push({ date: occ, delta: amt * sign, name, entry });
+      occ = addDays(occ, 14);
+    }
+    return out;
+  }
+
+  if (freq.includes("weekly")) {
+    let target = startDate.getDay();
+    if (typeof day === "string") {
+      const weekdays = [
+        "sunday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+      ];
+      const idx = weekdays.indexOf(day.toLowerCase());
+      if (idx >= 0) {
+        target = idx;
+      } else {
+        const parsed = normalizeDate(day);
+        if (parsed) target = parsed.getDay();
+      }
+    } else if (day instanceof Date) {
+      target = day.getDay();
+    }
+    const delta = (target - startDate.getDay() + 7) % 7;
+    let occ = addDays(startDate, delta);
+    while (occ <= end) {
+      out.push({ date: occ, delta: amt * sign, name, entry });
+      occ = addDays(occ, 7);
+    }
+    return out;
+  }
+
+  if (freq.includes("monthly")) {
+    let dom = Number(day);
+    if (!Number.isFinite(dom) || dom <= 0) {
+      dom = startDate.getDate();
+    }
+    let year = startDate.getFullYear();
+    let month = startDate.getMonth();
+    while (true) {
+      const clampedDay = Math.min(dom, 28);
+      const candidate = new Date(year, month, clampedDay);
+      if (candidate >= startDate && candidate <= end) {
+        out.push({ date: candidate, delta: amt * sign, name, entry });
+      }
+      if (year > end.getFullYear() || (year === end.getFullYear() && month >= end.getMonth())) {
+        break;
+      }
+      if (month === 11) {
+        year += 1;
+        month = 0;
+      } else {
+        month += 1;
+      }
+    }
+    return out;
+  }
+
+  if (freq.includes("ann")) {
+    const anchor = normalizeDate(day);
+    if (!anchor) return out;
+    let occ = new Date(startDate.getFullYear(), anchor.getMonth(), anchor.getDate());
+    if (occ < startDate) {
+      occ = new Date(startDate.getFullYear() + 1, anchor.getMonth(), anchor.getDate());
+    }
+    if (occ >= startDate && occ <= end) {
+      out.push({ date: occ, delta: amt * sign, name, entry });
+    }
+    return out;
+  }
+
+  const occ = normalizeDate(day);
+  if (occ && occ >= startDate && occ <= end) {
+    out.push({ date: occ, delta: amt * sign, name, entry });
+  }
+  return out;
+}
+
+function creditCardPaymentAmount(state) {
+  const method = state?.cc_pay_method_value || "I want to pay my bill in full";
+  const creditBalance = Number(state?.credit_balance || 0);
+  if (method === "I pay in full" || method === "I want to pay my bill in full") {
+    return Math.max(0, creditBalance);
+  }
+  if (method === "I pay the minimum" || method === "Custom") {
+    const unit = state?.cc_pay_amount_unit_value;
+    const amount = state?.cc_pay_amount_value;
+    if (unit === null || unit === undefined || amount === null || amount === undefined) {
+      return null;
+    }
+    if (Number(unit) === 1) {
+      return Math.max(0, Math.round((creditBalance * Number(amount)) / 100));
+    }
+    return Math.max(0, Number(amount));
+  }
+  return null;
+}
+
+function buildLocalLibraries(state, days) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const debitBills = [];
+  const creditBills = [];
+  const incomes = [];
+  const debitChanges = new Map();
+  const creditChanges = new Map();
+  const incomeChanges = new Map();
+
+  const bills = Array.isArray(state?.bills) ? state.bills : [];
+  bills.forEach((bill) => {
+    const type = String(bill?.type || "").trim().toLowerCase();
+    const isDebit = type === "debit";
+    occurrencesForEntry(bill, start, days, false).forEach((occ) => {
+      const date = isoDate(occ.date);
+      const amount = Math.abs(Number(occ.delta || 0));
+      const entry = { date, name: occ.name || "", amount };
+      if (isDebit) {
+        debitBills.push(entry);
+        debitChanges.set(date, (debitChanges.get(date) || 0) + Number(occ.delta || 0));
+      } else {
+        creditBills.push(entry);
+        creditChanges.set(date, (creditChanges.get(date) || 0) + Number(occ.delta || 0));
+      }
+    });
+  });
+
+  const incomeList = Array.isArray(state?.income) ? state.income : [];
+  incomeList.forEach((inc) => {
+    occurrencesForEntry({ ...inc, type: "Credit" }, start, days, true).forEach((occ) => {
+      const date = isoDate(occ.date);
+      incomes.push({ date, name: occ.name || "", amount: Math.abs(Number(occ.delta || 0)) });
+      incomeChanges.set(date, (incomeChanges.get(date) || 0) + Number(occ.delta || 0));
+    });
+  });
+
+  if (state?.cc_pay_day !== null && state?.cc_pay_day !== undefined) {
+    const payAmount = creditCardPaymentAmount(state) || 0;
+    const ccBill = {
+      name: "Credit Card Bill",
+      amount: payAmount,
+      frequency: "Monthly",
+      day: Number(state.cc_pay_day),
+      type: "Debit"
+    };
+    occurrencesForEntry(ccBill, start, days, false).forEach((occ) => {
+      if (payAmount <= 0) return;
+      const date = isoDate(occ.date);
+      debitBills.push({ date, name: "Credit Card Bill", amount: payAmount });
+      debitChanges.set(date, (debitChanges.get(date) || 0) - payAmount);
+      creditChanges.set(date, (creditChanges.get(date) || 0) - payAmount);
+    });
+  }
+
+  const debitBalanceSeries = [];
+  const creditBalanceSeries = [];
+  let debitRunning = Number(state?.debit_balance || 0);
+  let creditRunning = Number(state?.credit_balance || 0);
+  for (let i = 0; i <= days; i += 1) {
+    const day = addDays(start, i);
+    const key = isoDate(day);
+    debitRunning += (debitChanges.get(key) || 0) + (incomeChanges.get(key) || 0);
+    creditRunning += creditChanges.get(key) || 0;
+    debitBalanceSeries.push({ date: key, balance: Math.round(debitRunning) });
+    creditBalanceSeries.push({ date: key, balance: Math.round(creditRunning) });
+  }
+
+  return {
+    upcoming_debit_bills: debitBills,
+    upcoming_credit_bills: creditBills,
+    upcoming_incomes: incomes,
+    debit_balance_forecast: debitBalanceSeries,
+    credit_balance_forecast: creditBalanceSeries
+  };
+}
+
 export async function getState() {
   if (LOCAL_ONLY) {
     return loadLocalState() || {};
@@ -61,13 +281,7 @@ export async function putState(payload) {
 
 export async function getLibraries(days = 730) {
   if (LOCAL_ONLY) {
-    return {
-      upcoming_debit_bills: [],
-      upcoming_credit_bills: [],
-      upcoming_incomes: [],
-      debit_balance_forecast: [],
-      credit_balance_forecast: []
-    };
+    return buildLocalLibraries(loadLocalState() || {}, days);
   }
   const res = await fetch(buildUrl(`/api/libraries?days=${days}`), { headers: authHeaders() });
   if (!res.ok) {
@@ -133,7 +347,10 @@ export async function loginUser(payload) {
 
 export async function getSafeToSpend(days) {
   if (LOCAL_ONLY) {
-    return { safe_to_spend: 0, days };
+    const libs = buildLocalLibraries(loadLocalState() || {}, days);
+    const balances = (libs.debit_balance_forecast || []).map((row) => Number(row.balance || 0));
+    const min = balances.length ? Math.min(...balances) : 0;
+    return { safe_to_spend: Number(min || 0), days };
   }
   const res = await fetch(buildUrl(`/api/safe_to_spend?days=${days}`), { headers: authHeaders() });
   if (!res.ok) {
