@@ -711,6 +711,43 @@ export default function App() {
     )} over the next 5.0 years (assuming a 7% average annual return).`;
   })();
 
+  const floorWarning = (() => {
+    if (!debitFloorTarget) return null;
+    const horizonDays = 365;
+    const horizonEnd = addDays(today, horizonDays);
+    const candidates = (libs.debit_balance_forecast || []).filter((item) => {
+      const dateObj = parseIsoDate(item.date);
+      if (!dateObj) return false;
+      return dateObj >= today && dateObj <= horizonEnd;
+    });
+    if (candidates.length === 0) return null;
+    let lowest = Number.POSITIVE_INFINITY;
+    let lowestDate = null;
+    candidates.forEach((item) => {
+      const value = Number(item.balance || 0);
+      if (value < lowest) {
+        lowest = value;
+        lowestDate = parseIsoDate(item.date);
+      }
+    });
+    if (lowestDate && lowest < debitFloorTarget) {
+      const needed = Math.max(0, debitFloorTarget - lowest);
+      const dateLabel = lowestDate.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric"
+      });
+      return `Oops — heads up! If things stay the same, you’re projected to have only ${formatCurrency(
+        lowest
+      )} in your checking account on ${dateLabel}. To stay safe and keep at least ${formatCurrency(
+        debitFloorTarget
+      )} in your account, you’d want to save an extra ${formatCurrency(
+        needed
+      )} before then. A little buffer now could save you some stress later 🙂`;
+    }
+    return null;
+  })();
+
   function openBillModal(bill) {
     setBillModal(
       bill || {
@@ -1845,6 +1882,7 @@ No bank connections required. You can change everything later.</p>
                 </button>
               </div>
               {projectionSentence && <p className="muted">{projectionSentence}</p>}
+              {floorWarning && <p className="muted">{floorWarning}</p>}
             </div>
             <div className="card">
               <div className="card-header">
