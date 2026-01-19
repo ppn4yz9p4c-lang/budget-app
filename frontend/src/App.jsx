@@ -287,6 +287,7 @@ export default function App() {
   const [cashflowDaysInput, setCashflowDaysInput] = useState("");
   const [saveError, setSaveError] = useState("");
   const [showCcDebug, setShowCcDebug] = useState(false);
+  const [danSettingsEnabled, setDanSettingsEnabled] = useState(false);
   const [debitBalanceInput, setDebitBalanceInput] = useState("");
   const [creditBalanceInput, setCreditBalanceInput] = useState("");
   const [ccPayDayInput, setCcPayDayInput] = useState("");
@@ -812,6 +813,125 @@ export default function App() {
     setOnboardingStep((prev) => Math.min(prev + 1, 12));
   }
 
+  async function applyDanSettings() {
+    const bills = [
+      buildBillTemplate({
+        name: "Rent",
+        amount: 1825,
+        frequency: "Monthly",
+        day: 1,
+        type: "Debit"
+      }),
+      buildBillTemplate({
+        name: "Loans",
+        amount: 211,
+        frequency: "Monthly",
+        day: 1,
+        type: "Debit"
+      }),
+      buildBillTemplate({
+        name: "CookUnity",
+        amount: 165,
+        frequency: "Weekly",
+        day: "Monday",
+        type: "Credit"
+      }),
+      buildBillTemplate({
+        name: "Gas + Misc",
+        amount: 300,
+        frequency: "Weekly",
+        day: "Monday",
+        type: "Credit"
+      }),
+      buildBillTemplate({
+        name: "Geico",
+        amount: 146,
+        frequency: "Monthly",
+        day: 19,
+        type: "Credit"
+      }),
+      buildBillTemplate({
+        name: "Utilities",
+        amount: 80,
+        frequency: "Monthly",
+        day: 28,
+        type: "Credit"
+      }),
+      buildBillTemplate({
+        name: "Wifi",
+        amount: 35,
+        frequency: "Monthly",
+        day: 28,
+        type: "Credit"
+      }),
+      buildBillTemplate({
+        name: "Lemonade",
+        amount: 7,
+        frequency: "Monthly",
+        day: 28,
+        type: "Credit"
+      }),
+      buildBillTemplate({
+        name: "Spotify",
+        amount: 12,
+        frequency: "Monthly",
+        day: 3,
+        type: "Credit"
+      }),
+      buildBillTemplate({
+        name: "Geico",
+        amount: 146,
+        frequency: "Monthly",
+        day: 19,
+        type: "Credit"
+      })
+    ].map((entry) => ({
+      ...entry,
+      id: `bill_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    }));
+
+    const income = [
+      buildIncomeTemplate({
+        name: "Paycheck",
+        amount: 1750,
+        frequency: "Biweekly",
+        day: "2026-01-23"
+      }),
+      buildIncomeTemplate({
+        name: "Tutor",
+        amount: 180,
+        frequency: "Weekly",
+        day: "Monday"
+      })
+    ].map((entry) => ({
+      ...entry,
+      id: `income_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    }));
+
+    await commitState(
+      {
+        debit_balance: 1000,
+        credit_balance: 500,
+        cc_pay_method_value: "I want to pay my bill in full",
+        cc_pay_day: 13,
+        cc_pay_amount_unit_value: 0,
+        cc_pay_amount_value: null,
+        cc_apr_value: null,
+        bills,
+        income
+      },
+      "apply_dan_settings"
+    );
+
+    setDebitBalanceInput("1000");
+    setCreditBalanceInput("500");
+    setCcPayDayInput("13");
+    setCcPayAmountInput("");
+    setCcAprInput("");
+    localStorage.setItem("budget_onboarding_done", "1");
+    setOnboardingOpen(false);
+  }
+
   function handleOnboardingBack() {
     if (onboardingStep === 9 && onboardingData.addAnotherSubscription) {
       setOnboardingStep(8);
@@ -828,6 +948,20 @@ export default function App() {
           <p className="muted">Let’s set up your budget in just a couple of minutes.</p>
           <p className="muted">We’ll ask a few simple questions about your balances and spending so we can build a budget that actually fits your life.
 No bank connections required. You can change everything later.</p>
+          <label>
+            <input
+              type="checkbox"
+              checked={danSettingsEnabled}
+              onChange={async (e) => {
+                const checked = e.target.checked;
+                setDanSettingsEnabled(checked);
+                if (checked) {
+                  await applyDanSettings();
+                }
+              }}
+            />
+            Dan settings
+          </label>
         </>
       );
     }
