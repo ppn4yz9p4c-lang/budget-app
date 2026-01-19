@@ -10,6 +10,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 const LOCAL_ONLY = import.meta.env.VITE_LOCAL_ONLY === "true";
 const LOCAL_STATE_KEY = "budget_local_state";
 const STATE_CACHE_KEY = "budget_state_cache";
+const PAID_EVENTS_KEY = "budget_paid_events";
 
 function buildUrl(path) {
   if (!API_BASE) return path;
@@ -49,6 +50,20 @@ function loadMergedLocalState() {
   return { ...(cached || {}), ...(local || {}) };
 }
 
+function loadPaidEvents() {
+  try {
+    const raw = localStorage.getItem(PAID_EVENTS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (err) {
+    return {};
+  }
+}
+
+function buildPaidKey({ sourceId, name, date, type, amount }) {
+  const base = sourceId || name || "";
+  return `${base}|${date}|${type}|${amount}`;
+}
+
 function saveLocalState(next) {
   try {
     localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify(next));
@@ -86,6 +101,7 @@ function buildLocalLibraries(state, days) {
   const debitChanges = new Map();
   const creditChanges = new Map();
   const incomeChanges = new Map();
+  const paidEvents = loadPaidEvents();
   const creditChargeOccurrences = [];
   const ccPayDates = computeCcPayDates(start, days, state?.cc_pay_day);
   const ccPayDateSet = new Set(ccPayDates.map((date) => isoDate(date)));
@@ -102,14 +118,37 @@ function buildLocalLibraries(state, days) {
         date = isoDate(occDate);
       }
       const amount = Math.abs(Number(occ.delta || 0));
-      const entry = { date, name: occ.name || "", amount };
+      const entry = {
+        date,
+        name: occ.name || "",
+        amount,
+        sourceId: bill.id || ""
+      };
       if (isDebit) {
         debitBills.push(entry);
-        debitChanges.set(date, (debitChanges.get(date) || 0) + Number(occ.delta || 0));
+        const paidKey = buildPaidKey({
+          sourceId: entry.sourceId,
+          name: entry.name,
+          date,
+          type: "Debit",
+          amount
+        });
+        if (!paidEvents?.[paidKey]) {
+          debitChanges.set(date, (debitChanges.get(date) || 0) + Number(occ.delta || 0));
+        }
       } else {
         creditBills.push(entry);
-        creditChanges.set(date, (creditChanges.get(date) || 0) + Number(occ.delta || 0));
-        creditChargeOccurrences.push({ date, amount });
+        const paidKey = buildPaidKey({
+          sourceId: entry.sourceId,
+          name: entry.name,
+          date,
+          type: "Credit",
+          amount
+        });
+        if (!paidEvents?.[paidKey]) {
+          creditChanges.set(date, (creditChanges.get(date) || 0) + Number(occ.delta || 0));
+          creditChargeOccurrences.push({ date, amount });
+        }
       }
     });
   });
@@ -118,8 +157,19 @@ function buildLocalLibraries(state, days) {
   incomeList.forEach((inc) => {
     occurrencesForEntry({ ...inc, type: "Credit" }, start, days, true).forEach((occ) => {
       const date = isoDate(occ.date);
-      incomes.push({ date, name: occ.name || "", amount: Math.abs(Number(occ.delta || 0)) });
-      incomeChanges.set(date, (incomeChanges.get(date) || 0) + Number(occ.delta || 0));
+      const amount = Math.abs(Number(occ.delta || 0));
+      const entry = { date, name: occ.name || "", amount, sourceId: inc.id || "" };
+      incomes.push(entry);
+      const paidKey = buildPaidKey({
+        sourceId: entry.sourceId,
+        name: entry.name,
+        date,
+        type: "Debit",
+        amount
+      });
+      if (!paidEvents?.[paidKey]) {
+        incomeChanges.set(date, (incomeChanges.get(date) || 0) + Number(occ.delta || 0));
+      }
     });
   });
 

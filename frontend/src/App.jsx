@@ -153,6 +153,11 @@ function addDays(date, days) {
   return next;
 }
 
+function buildPaidKey({ sourceId, name, date, type, amount }) {
+  const base = sourceId || name || "";
+  return `${base}|${date}|${type}|${amount}`;
+}
+
 function isSameCalendarDay(a, b) {
   if (!a || !b) return false;
   return (
@@ -572,7 +577,8 @@ export default function App() {
       item: bill.name || "",
       type: "Debit",
       amount: Number(bill.amount || 0),
-      isIncome: false
+      isIncome: false,
+      sourceId: bill.sourceId || ""
     });
   });
   creditBills.forEach((bill) => {
@@ -581,7 +587,8 @@ export default function App() {
       item: bill.name || "",
       type: "Credit",
       amount: Number(bill.amount || 0),
-      isIncome: false
+      isIncome: false,
+      sourceId: bill.sourceId || ""
     });
   });
   incomes.forEach((inc) => {
@@ -590,14 +597,21 @@ export default function App() {
       item: inc.name || "",
       type: "Debit",
       amount: Number(inc.amount || 0),
-      isIncome: true
+      isIncome: true,
+      sourceId: inc.sourceId || ""
     });
   });
   cashflowEvents.sort((a, b) => String(a.date).localeCompare(String(b.date)));
 
-  const cashflowEventsWithKeys = cashflowEvents.map((event, index) => ({
+  const cashflowEventsWithKeys = cashflowEvents.map((event) => ({
     ...event,
-    key: `${event.date}|${event.item}|${event.type}|${event.amount}|${index}`
+    key: buildPaidKey({
+      sourceId: event.sourceId,
+      name: event.item,
+      date: event.date,
+      type: event.type,
+      amount: event.amount
+    })
   }));
 
   const paidDebitAdjustments = new Map();
