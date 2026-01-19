@@ -1,5 +1,6 @@
 import {
   addDays,
+  buildPaidKey,
   computeCcBillWindows,
   computeCcPayDates,
   isoDate,
@@ -57,11 +58,6 @@ function loadPaidEvents() {
   } catch (err) {
     return {};
   }
-}
-
-function buildPaidKey({ sourceId, name, date, type, amount }) {
-  const base = sourceId || name || "";
-  return `${base}|${date}|${type}|${amount}`;
 }
 
 function saveLocalState(next) {
@@ -180,7 +176,7 @@ function buildLocalLibraries(state, days) {
     const sortedPayDates = ccPayDates.slice().sort((a, b) => a - b);
 
     if (payInFull) {
-      const ccDebug = computeCcBillWindows(state, days, start);
+      const ccDebug = computeCcBillWindows(state, days, start, paidEvents);
       (ccDebug.payments || []).forEach((payment) => {
         if (payment.amount > 0) {
           const payKey = payment.date;

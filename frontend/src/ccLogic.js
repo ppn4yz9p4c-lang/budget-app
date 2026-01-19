@@ -15,6 +15,11 @@ function isoDate(date) {
   return `${year}-${month}-${day}`;
 }
 
+function buildPaidKey({ sourceId, name, date, type, amount }) {
+  const base = sourceId || name || "";
+  return `${base}|${date}|${type}|${amount}`;
+}
+
 function addDays(date, days) {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
@@ -136,7 +141,7 @@ function computeCcPayDates(startDate, days, ccPayDay) {
   return occurrencesForEntry(schedule, startDate, days, false).map((occ) => occ.date);
 }
 
-function computeCcBillWindows(state, days, startDate = new Date()) {
+function computeCcBillWindows(state, days, startDate = new Date(), paidEvents = {}) {
   const start = new Date(startDate);
   start.setHours(0, 0, 0, 0);
   const payDates = computeCcPayDates(start, days, state?.cc_pay_day);
@@ -158,7 +163,16 @@ function computeCcBillWindows(state, days, startDate = new Date()) {
         dateKey = isoDate(occDate);
       }
       const amount = Math.abs(Number(occ.delta || 0));
-      creditChanges.set(dateKey, (creditChanges.get(dateKey) || 0) + amount);
+      const paidKey = buildPaidKey({
+        sourceId: bill.id || "",
+        name: bill.name || "",
+        date: dateKey,
+        type: "Credit",
+        amount
+      });
+      if (!paidEvents?.[paidKey]) {
+        creditChanges.set(dateKey, (creditChanges.get(dateKey) || 0) + amount);
+      }
     });
   });
 
@@ -197,6 +211,7 @@ function computeCcBillWindows(state, days, startDate = new Date()) {
 
 export {
   addDays,
+  buildPaidKey,
   computeCcBillWindows,
   computeCcPayDates,
   isoDate,

@@ -23,7 +23,7 @@ import {
   putState,
   uploadBackup
 } from "./api";
-import { computeCcBillWindows } from "./ccLogic";
+import { buildPaidKey, computeCcBillWindows } from "./ccLogic";
 import { computeSnpProjection } from "./investment";
 import { saveState } from "./saveState";
 
@@ -151,11 +151,6 @@ function addDays(date, days) {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
   return next;
-}
-
-function buildPaidKey({ sourceId, name, date, type, amount }) {
-  const base = sourceId || name || "";
-  return `${base}|${date}|${type}|${amount}`;
 }
 
 function isSameCalendarDay(a, b) {
