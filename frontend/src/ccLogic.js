@@ -149,9 +149,7 @@ function computeCcBillWindows(state, days, startDate = new Date(), paidEvents = 
     return { payDates: [], rows: [], payments: [] };
   }
 
-  const payDateSet = new Set(payDates.map((date) => isoDate(date)));
   const creditChanges = new Map();
-  const paidCreditChanges = new Map();
   const bills = Array.isArray(state?.bills) ? state.bills : [];
   bills.forEach((bill) => {
     const type = String(bill?.type || "").trim().toLowerCase();
@@ -159,10 +157,6 @@ function computeCcBillWindows(state, days, startDate = new Date(), paidEvents = 
     occurrencesForEntry(bill, start, days, false).forEach((occ) => {
       let occDate = occ.date;
       let dateKey = isoDate(occDate);
-      if (payDateSet.has(dateKey)) {
-        occDate = addDays(occDate, 1);
-        dateKey = isoDate(occDate);
-      }
       const amount = Math.abs(Number(occ.delta || 0));
       const paidKey = buildPaidKey({
         sourceId: bill.id || "",
@@ -172,9 +166,6 @@ function computeCcBillWindows(state, days, startDate = new Date(), paidEvents = 
         amount
       });
       creditChanges.set(dateKey, (creditChanges.get(dateKey) || 0) + amount);
-      if (paidEvents?.[paidKey]) {
-        paidCreditChanges.set(dateKey, (paidCreditChanges.get(dateKey) || 0) + amount);
-      }
     });
   });
 
@@ -183,23 +174,18 @@ function computeCcBillWindows(state, days, startDate = new Date(), paidEvents = 
   const rows = [];
   const payments = [];
   let creditRunning = Math.max(0, Number(state?.credit_balance || 0));
-  let paidCreditRunning = 0;
   for (let i = 0; i <= days; i += 1) {
     const day = addDays(start, i);
     const key = isoDate(day);
     const dailyCredit = creditChanges.get(key) || 0;
-    const dailyPaidCredit = paidCreditChanges.get(key) || 0;
     creditRunning += dailyCredit;
-    paidCreditRunning += dailyPaidCredit;
     if (payDateKeySet.has(key)) {
       const creditBeforePayment = creditRunning - dailyCredit;
-      const paidBeforePayment = paidCreditRunning - dailyPaidCredit;
-      const payAmount = Math.max(0, creditBeforePayment - paidBeforePayment);
+      const payAmount = Math.max(0, creditBeforePayment);
       rows.push({
         date: key,
         creditBeforePayment,
         dailyCredit,
-        paidBeforePayment,
         payAmount
       });
       if (payAmount > 0) {

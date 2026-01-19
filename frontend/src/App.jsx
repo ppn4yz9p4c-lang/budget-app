@@ -1883,8 +1883,7 @@ No bank connections required. You can change everything later.</p>
                     (ccDebug.rows || []).map((row) => (
                       <p key={row.date} className="muted">
                         {row.date}: balance {formatCurrency(row.creditBeforePayment)} + day
-                        charges {formatCurrency(row.dailyCredit)} - paid{" "}
-                        {formatCurrency(row.paidBeforePayment || 0)} → bill{" "}
+                        charges {formatCurrency(row.dailyCredit)} → bill{" "}
                         {formatCurrency(row.payAmount)}
                       </p>
                     ))

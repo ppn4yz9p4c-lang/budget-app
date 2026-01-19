@@ -98,21 +98,14 @@ function buildLocalLibraries(state, days) {
   const creditChanges = new Map();
   const incomeChanges = new Map();
   const paidEvents = loadPaidEvents();
-  const creditChargeOccurrences = [];
   const ccPayDates = computeCcPayDates(start, days, state?.cc_pay_day);
-  const ccPayDateSet = new Set(ccPayDates.map((date) => isoDate(date)));
 
   const bills = Array.isArray(state?.bills) ? state.bills : [];
   bills.forEach((bill) => {
     const type = String(bill?.type || "").trim().toLowerCase();
     const isDebit = type === "debit";
     occurrencesForEntry(bill, start, days, false).forEach((occ) => {
-      let occDate = occ.date;
-      let date = isoDate(occDate);
-      if (!isDebit && ccPayDateSet.has(date)) {
-        occDate = addDays(occDate, 1);
-        date = isoDate(occDate);
-      }
+      const date = isoDate(occ.date);
       const amount = Math.abs(Number(occ.delta || 0));
       const entry = {
         date,
@@ -143,7 +136,6 @@ function buildLocalLibraries(state, days) {
         });
         if (!paidEvents?.[paidKey]) {
           creditChanges.set(date, (creditChanges.get(date) || 0) + Number(occ.delta || 0));
-          creditChargeOccurrences.push({ date, amount });
         }
       }
     });
