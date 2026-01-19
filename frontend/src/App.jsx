@@ -1017,6 +1017,20 @@ export default function App() {
           next[key] = true;
         });
       });
+      income.forEach((inc) => {
+        occurrencesForEntry({ ...inc, type: "Credit" }, today, 0, true).forEach((occ) => {
+          const date = isoDate(occ.date);
+          const amount = Math.abs(Number(occ.delta || 0));
+          const key = buildPaidKey({
+            sourceId: inc.id || "",
+            name: inc.name || "",
+            date,
+            type: "Debit",
+            amount
+          });
+          next[key] = true;
+        });
+      });
       return next;
     });
     localStorage.setItem("budget_onboarding_done", "1");
@@ -1869,7 +1883,8 @@ No bank connections required. You can change everything later.</p>
                     (ccDebug.rows || []).map((row) => (
                       <p key={row.date} className="muted">
                         {row.date}: balance {formatCurrency(row.creditBeforePayment)} + day
-                        charges {formatCurrency(row.dailyCredit)} → bill{" "}
+                        charges {formatCurrency(row.dailyCredit)} - paid{" "}
+                        {formatCurrency(row.paidBeforePayment || 0)} → bill{" "}
                         {formatCurrency(row.payAmount)}
                       </p>
                     ))

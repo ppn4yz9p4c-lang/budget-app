@@ -151,6 +151,7 @@ function computeCcBillWindows(state, days, startDate = new Date(), paidEvents = 
 
   const payDateSet = new Set(payDates.map((date) => isoDate(date)));
   const creditChanges = new Map();
+  const paidCreditChanges = new Map();
   const bills = Array.isArray(state?.bills) ? state.bills : [];
   bills.forEach((bill) => {
     const type = String(bill?.type || "").trim().toLowerCase();
@@ -170,8 +171,9 @@ function computeCcBillWindows(state, days, startDate = new Date(), paidEvents = 
         type: "Credit",
         amount
       });
-      if (!paidEvents?.[paidKey]) {
-        creditChanges.set(dateKey, (creditChanges.get(dateKey) || 0) + amount);
+      creditChanges.set(dateKey, (creditChanges.get(dateKey) || 0) + amount);
+      if (paidEvents?.[paidKey]) {
+        paidCreditChanges.set(dateKey, (paidCreditChanges.get(dateKey) || 0) + amount);
       }
     });
   });
@@ -181,18 +183,23 @@ function computeCcBillWindows(state, days, startDate = new Date(), paidEvents = 
   const rows = [];
   const payments = [];
   let creditRunning = Math.max(0, Number(state?.credit_balance || 0));
+  let paidCreditRunning = 0;
   for (let i = 0; i <= days; i += 1) {
     const day = addDays(start, i);
     const key = isoDate(day);
     const dailyCredit = creditChanges.get(key) || 0;
+    const dailyPaidCredit = paidCreditChanges.get(key) || 0;
     creditRunning += dailyCredit;
+    paidCreditRunning += dailyPaidCredit;
     if (payDateKeySet.has(key)) {
       const creditBeforePayment = creditRunning - dailyCredit;
-      const payAmount = Math.max(0, creditBeforePayment);
+      const paidBeforePayment = paidCreditRunning - dailyPaidCredit;
+      const payAmount = Math.max(0, creditBeforePayment - paidBeforePayment);
       rows.push({
         date: key,
         creditBeforePayment,
         dailyCredit,
+        paidBeforePayment,
         payAmount
       });
       if (payAmount > 0) {
