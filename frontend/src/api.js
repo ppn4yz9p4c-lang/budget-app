@@ -265,10 +265,10 @@ function buildLocalLibraries(state, days) {
       sortedPayDates.forEach((payDate) => {
         let sum = 0;
         creditChargeOccurrences.forEach((charge) => {
-          if (
-            (prevDate ? charge.date > prevDate : charge.date >= start) &&
-            charge.date <= payDate
-          ) {
+          const inWindow = prevDate
+            ? charge.date >= prevDate && charge.date < payDate
+            : charge.date >= start && charge.date < payDate;
+          if (inWindow) {
             sum += charge.amount;
           }
         });
