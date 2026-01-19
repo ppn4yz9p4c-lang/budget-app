@@ -23,7 +23,7 @@ import {
   putState,
   uploadBackup
 } from "./api";
-import { buildPaidKey, computeCcBillWindows } from "./ccLogic";
+import { buildPaidKey, computeCcBillWindows, isoDate, occurrencesForEntry } from "./ccLogic";
 import { computeSnpProjection } from "./investment";
 import { saveState } from "./saveState";
 
@@ -890,6 +890,8 @@ export default function App() {
   }
 
   async function applyDanSettings() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const bills = [
       buildBillTemplate({
         name: "Rent",
@@ -986,6 +988,7 @@ export default function App() {
         cc_pay_amount_unit_value: 0,
         cc_pay_amount_value: null,
         cc_apr_value: null,
+        cashflow_days: 120,
         bills,
         income
       },
@@ -997,6 +1000,25 @@ export default function App() {
     setCcPayDayInput("13");
     setCcPayAmountInput("");
     setCcAprInput("");
+    setCashflowDaysInput("120");
+    setPaidEvents((prev) => {
+      const next = { ...(prev || {}) };
+      bills.forEach((bill) => {
+        occurrencesForEntry(bill, today, 0, false).forEach((occ) => {
+          const date = isoDate(occ.date);
+          const amount = Math.abs(Number(occ.delta || 0));
+          const key = buildPaidKey({
+            sourceId: bill.id || "",
+            name: bill.name || "",
+            date,
+            type: bill.type || "",
+            amount
+          });
+          next[key] = true;
+        });
+      });
+      return next;
+    });
     localStorage.setItem("budget_onboarding_done", "1");
     setOnboardingOpen(false);
   }
