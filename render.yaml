@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: budget-app-api
+    env: python
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    disk:
+      name: budget-app-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:////var/data/budget_app.db
+  - type: static
+    name: budget-app-web
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://budget-app-api.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

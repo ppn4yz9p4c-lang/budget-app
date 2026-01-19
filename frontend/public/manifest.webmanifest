@@ -1,0 +1,22 @@
+{
+  "name": "Budget App",
+  "short_name": "Budget App",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f1ea",
+  "theme_color": "#f4f1ea",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
