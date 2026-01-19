@@ -23,6 +23,7 @@ import {
   putState,
   uploadBackup
 } from "./api";
+import { computeCcBillWindows } from "./ccLogic";
 import { computeSnpProjection } from "./investment";
 import { saveState } from "./saveState";
 
@@ -285,6 +286,7 @@ export default function App() {
   const [debitFloorInput, setDebitFloorInput] = useState("");
   const [cashflowDaysInput, setCashflowDaysInput] = useState("");
   const [saveError, setSaveError] = useState("");
+  const [showCcDebug, setShowCcDebug] = useState(false);
   const [debitBalanceInput, setDebitBalanceInput] = useState("");
   const [creditBalanceInput, setCreditBalanceInput] = useState("");
   const [ccPayDayInput, setCcPayDayInput] = useState("");
@@ -510,6 +512,8 @@ export default function App() {
   cashflowEnd.setDate(cashflowStart.getDate() + cashflowDays);
   const cashflowToday =
     parseIsoDate(libs.debit_balance_forecast?.[0]?.date) || cashflowStart;
+
+  const ccDebug = computeCcBillWindows(state, cashflowDays, cashflowStart);
 
   function withinRange(entry) {
     const date = parseIsoDate(entry.date) || new Date(entry.date);
@@ -1593,6 +1597,38 @@ No bank connections required. You can change everything later.</p>
                 </button>
               </div>
               {projectionSentence && <p className="muted">{projectionSentence}</p>}
+            </div>
+            <div className="card">
+              <div className="card-header">
+                <h3>CC Bill Debug</h3>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => setShowCcDebug((prev) => !prev)}
+                >
+                  {showCcDebug ? "Hide" : "Show"}
+                </button>
+              </div>
+              {!state.cc_pay_day && <p className="muted">No CC pay day set.</p>}
+              {state.cc_pay_day && showCcDebug && (
+                <>
+                  <p className="muted">
+                    Pay dates: {(ccDebug.payDates || []).join(", ") || "None"}
+                  </p>
+                  {(ccDebug.windows || []).length === 0 ? (
+                    <p className="muted">No CC bill windows found.</p>
+                  ) : (
+                    (ccDebug.windows || []).map((window) => (
+                      <p key={`${window.start}-${window.end}`} className="muted">
+                        {window.start} to {window.end}: charges{" "}
+                        {formatCurrency(window.chargesTotal)} + balance{" "}
+                        {formatCurrency(window.balanceIncluded)} ={" "}
+                        {formatCurrency(window.total)}
+                      </p>
+                    ))
+                  )}
+                </>
+              )}
             </div>
           </>
         )}
