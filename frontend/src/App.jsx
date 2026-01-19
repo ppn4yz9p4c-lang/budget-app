@@ -981,6 +981,7 @@ export default function App() {
         cc_pay_amount_value: null,
         cc_apr_value: null,
         cashflow_days: 120,
+        graph_end_date: toDateKey(addDays(today, 120)),
         bills,
         income
       },
