@@ -999,6 +999,24 @@ export default function App() {
           next[key] = true;
         });
       });
+      const tutor = income.find((inc) => inc.name === "Tutor");
+      if (tutor) {
+        const startRange = new Date("2026-06-20T00:00:00");
+        const endRange = new Date("2026-09-01T00:00:00");
+        const days = Math.max(0, Math.floor((endRange - startRange) / (24 * 60 * 60 * 1000)));
+        occurrencesForEntry({ ...tutor, type: "Credit" }, startRange, days, true).forEach((occ) => {
+          const date = isoDate(occ.date);
+          const amount = Math.abs(Number(occ.delta || 0));
+          const key = buildPaidKey({
+            sourceId: tutor.id || "",
+            name: tutor.name || "",
+            date,
+            type: "Debit",
+            amount
+          });
+          next[key] = true;
+        });
+      }
       return next;
     });
     localStorage.setItem("budget_onboarding_done", "1");
