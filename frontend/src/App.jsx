@@ -687,36 +687,7 @@ export default function App() {
     return { min, minDate };
   })();
 
-  const projectionSentence = (() => {
-    if (!debitFloorTarget) return null;
-    const items = (libs.debit_balance_forecast || []).slice();
-    if (items.length === 0) return null;
-    items.sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    const horizon = Math.min(1825, items.length);
-    const balances = items.slice(0, horizon).map((item) => Number(item.balance || 0));
-    const result = computeSnpProjection(balances, debitFloorTarget);
-    const rounded = Math.round(result.calculatedReturn);
-    const isDev = import.meta?.env?.DEV;
-    if (isDev) {
-      const invariant = Math.abs(result.finalInvestmentValue - result.totalTransferred - result.calculatedReturn);
-      if (invariant > 1) {
-        // eslint-disable-next-line no-console
-        console.warn("S&P projection invariant mismatch", {
-          minProjected: result.minProjected,
-          cap: result.cap,
-          totalTransferred: result.totalTransferred,
-          finalInvestmentValue: result.finalInvestmentValue,
-          finalHypDebit: result.finalHypDebit,
-          invariant
-        });
-      }
-    }
-    return `By investing any savings beyond a ${formatCurrency(
-      debitFloorTarget
-    )} minimum balance into the S&P 500, you are projected to earn an additional ${formatCurrency(
-      rounded
-    )} over the next 5.0 years (assuming a 7% average annual return).`;
-  })();
+  const projectionSentence = null;
 
   const floorWarning = (() => {
     if (!debitFloorTarget) return null;
@@ -1897,7 +1868,6 @@ No bank connections required. You can change everything later.</p>
                   Update
                 </button>
               </div>
-              {projectionSentence && <p className="muted">{projectionSentence}</p>}
               {floorWarning && <p className="muted">{floorWarning}</p>}
             </div>
             <div className="card">
