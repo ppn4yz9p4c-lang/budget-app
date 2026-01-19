@@ -240,7 +240,7 @@ function buildLocalLibraries(state, days) {
       } else {
         creditBills.push(entry);
         creditChanges.set(date, (creditChanges.get(date) || 0) + Number(occ.delta || 0));
-        creditChargeOccurrences.push({ date: occDate, amount });
+        creditChargeOccurrences.push({ date, amount });
       }
     });
   });
@@ -261,27 +261,28 @@ function buildLocalLibraries(state, days) {
     const sortedPayDates = ccPayDates.slice().sort((a, b) => a - b);
 
     if (payInFull) {
-      let prevDate = null;
+      const startKey = isoDate(start);
+      let prevKey = null;
       sortedPayDates.forEach((payDate) => {
+        const payKey = isoDate(payDate);
         let sum = 0;
         creditChargeOccurrences.forEach((charge) => {
-          const inWindow = prevDate
-            ? charge.date >= prevDate && charge.date < payDate
-            : charge.date >= start && charge.date < payDate;
+          const inWindow = prevKey
+            ? charge.date >= prevKey && charge.date < payKey
+            : charge.date >= startKey && charge.date < payKey;
           if (inWindow) {
             sum += charge.amount;
           }
         });
-        if (!prevDate) {
+        if (!prevKey) {
           sum += Math.max(0, Number(state?.credit_balance || 0));
         }
         if (sum > 0) {
-          const key = isoDate(payDate);
-          debitBills.push({ date: key, name: "Credit Card Bill", amount: sum });
-          debitChanges.set(key, (debitChanges.get(key) || 0) - sum);
-          creditChanges.set(key, (creditChanges.get(key) || 0) - sum);
+          debitBills.push({ date: payKey, name: "Credit Card Bill", amount: sum });
+          debitChanges.set(payKey, (debitChanges.get(payKey) || 0) - sum);
+          creditChanges.set(payKey, (creditChanges.get(payKey) || 0) - sum);
         }
-        prevDate = payDate;
+        prevKey = payKey;
       });
     } else {
       const apr = Math.max(0, Number(state?.cc_apr_value || 0));
