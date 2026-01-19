@@ -192,7 +192,7 @@ function buildDefaultState() {
   return {
     debit_balance: 0,
     credit_balance: 0,
-    cc_pay_day: null,
+    cc_pay_day: 13,
     cc_pay_method_value: "I want to pay my bill in full",
     cc_pay_amount_value: null,
     cc_pay_amount_unit_value: null,
@@ -391,6 +391,15 @@ export default function App() {
       alertItems = results[3].status === "fulfilled" ? results[3].value : alertItems;
       suggested = results[4].status === "fulfilled" ? results[4].value : suggested;
     } finally {
+      if (current.cc_pay_day === null || current.cc_pay_day === undefined) {
+        current = {
+          ...current,
+          cc_pay_day: 13,
+          cc_pay_method_value:
+            current.cc_pay_method_value || "I want to pay my bill in full"
+        };
+        saveCachedState(current);
+      }
       setState(current);
       setLibs(libraries);
       setSafeSpend(safe);
