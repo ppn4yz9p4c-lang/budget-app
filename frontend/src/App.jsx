@@ -289,6 +289,14 @@ export default function App() {
   const [showCcDebug, setShowCcDebug] = useState(false);
   const [danSettingsEnabled, setDanSettingsEnabled] = useState(false);
   const [inputsHydrated, setInputsHydrated] = useState(false);
+  const [paidEvents, setPaidEvents] = useState(() => {
+    try {
+      const raw = localStorage.getItem("budget_paid_events");
+      return raw ? JSON.parse(raw) : {};
+    } catch (err) {
+      return {};
+    }
+  });
   const [debitBalanceInput, setDebitBalanceInput] = useState("");
   const [creditBalanceInput, setCreditBalanceInput] = useState("");
   const [ccPayDayInput, setCcPayDayInput] = useState("");
@@ -419,6 +427,14 @@ export default function App() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("budget_paid_events", JSON.stringify(paidEvents));
+    } catch (err) {
+      // ignore persistence errors
+    }
+  }, [paidEvents]);
 
   useEffect(() => {
     if (!state) return;
@@ -577,6 +593,65 @@ export default function App() {
     });
   });
   cashflowEvents.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+  const cashflowEventsWithKeys = cashflowEvents.map((event, index) => ({
+    ...event,
+    key: `${event.date}|${event.item}|${event.type}|${event.amount}|${index}`
+  }));
+
+  const paidDebitAdjustments = new Map();
+  const paidCreditAdjustments = new Map();
+  const addAdjustment = (map, date, delta) => {
+    if (!delta) return;
+    map.set(date, (map.get(date) || 0) + delta);
+  };
+
+  let paidAwareTotalIncome = 0;
+  let paidAwareTotalBills = 0;
+  cashflowEventsWithKeys.forEach((event) => {
+    const isPaid = Boolean(paidEvents?.[event.key]);
+    if (!isPaid) {
+      if (event.isIncome) {
+        paidAwareTotalIncome += event.amount;
+      } else if (event.item !== "Credit Card Bill") {
+        paidAwareTotalBills += event.amount;
+      }
+    } else if (event.isIncome) {
+      addAdjustment(paidDebitAdjustments, event.date, -event.amount);
+    } else if (event.type === "Debit") {
+      addAdjustment(paidDebitAdjustments, event.date, event.amount);
+    } else if (event.type === "Credit") {
+      addAdjustment(paidCreditAdjustments, event.date, -event.amount);
+    }
+  });
+
+  const paidAwareNet = paidAwareTotalIncome - paidAwareTotalBills;
+  const paidBalanceDates = new Set([
+    ...debitBalanceMap.keys(),
+    ...creditBalanceMap.keys(),
+    ...cashflowEventsWithKeys.map((event) => event.date)
+  ]);
+  const paidBalanceDateList = Array.from(paidBalanceDates).sort();
+  let paidDebitAdjRunning = 0;
+  let paidCreditAdjRunning = 0;
+  const paidDebitBalanceMap = new Map();
+  const paidCreditBalanceMap = new Map();
+  paidBalanceDateList.forEach((dateKey) => {
+    paidDebitAdjRunning += paidDebitAdjustments.get(dateKey) || 0;
+    paidCreditAdjRunning += paidCreditAdjustments.get(dateKey) || 0;
+    const baseDebit = debitBalanceMap.get(dateKey) ?? debitBalance;
+    const baseCredit = creditBalanceMap.get(dateKey) ?? creditBalance;
+    paidDebitBalanceMap.set(dateKey, baseDebit + paidDebitAdjRunning);
+    paidCreditBalanceMap.set(dateKey, baseCredit + paidCreditAdjRunning);
+  });
+  let paidLowestBalance = debitBalance;
+  let paidLowestDate = cashflowStart;
+  paidDebitBalanceMap.forEach((balance, dateString) => {
+    if (balance < paidLowestBalance) {
+      paidLowestBalance = balance;
+      paidLowestDate = parseIsoDate(dateString) || cashflowStart;
+    }
+  });
 
   const graphEndDate = state.graph_end_date
     ? parseIsoDate(state.graph_end_date)
@@ -867,13 +942,6 @@ export default function App() {
         amount: 12,
         frequency: "Monthly",
         day: 3,
-        type: "Credit"
-      }),
-      buildBillTemplate({
-        name: "Geico",
-        amount: 146,
-        frequency: "Monthly",
-        day: 19,
         type: "Credit"
       })
     ].map((entry) => ({
@@ -1585,23 +1653,23 @@ No bank connections required. You can change everything later.</p>
               <h3>Upcoming Cash Flow - Next {cashflowDays} Days</h3>
               <div className="summary">
                 <div>
-                  <strong>Income</strong> {formatCurrency(totalIncome)}
+                  <strong>Income</strong> {formatCurrency(paidAwareTotalIncome)}
                 </div>
                 <div>
-                  <strong>Bills</strong> {formatCurrency(totalBills)}
+                  <strong>Bills</strong> {formatCurrency(paidAwareTotalBills)}
                 </div>
                 <div>
-                  <strong>Net</strong> {net >= 0 ? "+" : "-"}
-                  {formatCurrency(Math.abs(net))} {net >= 0 ? "OK" : "WARN"}
+                  <strong>Net</strong> {paidAwareNet >= 0 ? "+" : "-"}
+                  {formatCurrency(Math.abs(paidAwareNet))} {paidAwareNet >= 0 ? "OK" : "WARN"}
                 </div>
               </div>
               <p className="muted">
-                Lowest Balance: {formatDateShort(lowestDate)} - {formatCurrency(lowestBalance)}
+                Lowest Balance: {formatDateShort(paidLowestDate)} - {formatCurrency(paidLowestBalance)}
               </p>
             </div>
 
             <div className="card">
-              {cashflowEvents.length === 0 ? (
+              {cashflowEventsWithKeys.length === 0 ? (
                 <p className="muted">No upcoming items in the selected range.</p>
               ) : (
                 <table>
@@ -1613,35 +1681,56 @@ No bank connections required. You can change everything later.</p>
                       <th className="right">Amount</th>
                       <th className="right">Debit Balance</th>
                       <th className="right">Credit Balance</th>
+                      <th className="right">Paid?</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {cashflowEvents
+                    {cashflowEventsWithKeys
                       .filter((ev) => {
                         const view = state.cashflow_view_filter || "All";
                         if (view === "All") return true;
                         return ev.type === view;
                       })
                       .map((ev, index) => {
+                        const isPaid = Boolean(paidEvents?.[ev.key]);
                         const dateObj = parseIsoDate(ev.date);
                         const dateLabel = dateObj
                           ? isSameCalendarDay(dateObj, cashflowToday)
                             ? "Today"
                             : formatDateShort(dateObj)
                           : ev.date;
-                        const debitBal = debitBalanceMap.get(ev.date) ?? debitBalance;
-                        const creditBal = creditBalanceMap.get(ev.date) ?? creditBalance;
+                        const debitBal = paidDebitBalanceMap.get(ev.date) ?? debitBalance;
+                        const creditBal = paidCreditBalanceMap.get(ev.date) ?? creditBalance;
+                        const paidClass = isPaid ? "paid-cell" : "";
                         return (
                           <tr
                             key={`${ev.date}-${ev.item}-${index}`}
                             style={{ backgroundColor: ev.isIncome ? "#e9f8ef" : "#fdecea" }}
                           >
-                            <td>{dateLabel}</td>
-                            <td>{ev.item}</td>
-                            <td>{ev.type}</td>
-                            <td className="right">{formatCurrency(ev.amount)}</td>
+                            <td className={paidClass}>{dateLabel}</td>
+                            <td className={paidClass}>{ev.item}</td>
+                            <td className={paidClass}>{ev.type}</td>
+                            <td className={`right ${paidClass}`}>{formatCurrency(ev.amount)}</td>
                             <td className="right">{formatCurrency(debitBal)}</td>
                             <td className="right">{formatCurrency(creditBal)}</td>
+                            <td className="right">
+                              <input
+                                type="checkbox"
+                                checked={isPaid}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setPaidEvents((prev) => {
+                                    const next = { ...(prev || {}) };
+                                    if (checked) {
+                                      next[ev.key] = true;
+                                    } else {
+                                      delete next[ev.key];
+                                    }
+                                    return next;
+                                  });
+                                }}
+                              />
+                            </td>
                           </tr>
                         );
                       })}

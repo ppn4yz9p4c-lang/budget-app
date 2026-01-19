@@ -227,6 +227,11 @@ td {
   margin-top: 12px;
 }
 
+.paid-cell {
+  color: #7a7a7a;
+  text-decoration: line-through;
+}
+
 .loading {
   padding: 32px;
   font-size: 18px;
