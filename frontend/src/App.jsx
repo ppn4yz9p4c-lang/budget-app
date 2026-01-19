@@ -288,6 +288,7 @@ export default function App() {
   const [saveError, setSaveError] = useState("");
   const [showCcDebug, setShowCcDebug] = useState(false);
   const [danSettingsEnabled, setDanSettingsEnabled] = useState(false);
+  const [inputsHydrated, setInputsHydrated] = useState(false);
   const [debitBalanceInput, setDebitBalanceInput] = useState("");
   const [creditBalanceInput, setCreditBalanceInput] = useState("");
   const [ccPayDayInput, setCcPayDayInput] = useState("");
@@ -426,34 +427,24 @@ export default function App() {
   }, [state]);
 
   useEffect(() => {
-    if (!state) return;
-    if (debitBalanceInput === "" && state.debit_balance !== null && state.debit_balance !== undefined) {
+    if (!state || inputsHydrated) return;
+    if (state.debit_balance !== null && state.debit_balance !== undefined) {
       setDebitBalanceInput(String(state.debit_balance));
     }
-    if (creditBalanceInput === "" && state.credit_balance !== null && state.credit_balance !== undefined) {
+    if (state.credit_balance !== null && state.credit_balance !== undefined) {
       setCreditBalanceInput(String(state.credit_balance));
     }
-    if (ccPayDayInput === "" && state.cc_pay_day !== null && state.cc_pay_day !== undefined) {
+    if (state.cc_pay_day !== null && state.cc_pay_day !== undefined) {
       setCcPayDayInput(String(state.cc_pay_day));
     }
-    if (
-      ccPayAmountInput === "" &&
-      state.cc_pay_amount_value !== null &&
-      state.cc_pay_amount_value !== undefined
-    ) {
+    if (state.cc_pay_amount_value !== null && state.cc_pay_amount_value !== undefined) {
       setCcPayAmountInput(String(state.cc_pay_amount_value));
     }
-    if (ccAprInput === "" && state.cc_apr_value !== null && state.cc_apr_value !== undefined) {
+    if (state.cc_apr_value !== null && state.cc_apr_value !== undefined) {
       setCcAprInput(String(state.cc_apr_value));
     }
-  }, [
-    state,
-    debitBalanceInput,
-    creditBalanceInput,
-    ccPayDayInput,
-    ccPayAmountInput,
-    ccAprInput
-  ]);
+    setInputsHydrated(true);
+  }, [state, inputsHydrated]);
 
   async function updateState(patch) {
     mergeCachedState(state, patch);
