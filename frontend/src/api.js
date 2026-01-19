@@ -1,6 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 const LOCAL_ONLY = import.meta.env.VITE_LOCAL_ONLY === "true";
 const LOCAL_STATE_KEY = "budget_local_state";
+const STATE_CACHE_KEY = "budget_state_cache";
 
 function buildUrl(path) {
   if (!API_BASE) return path;
@@ -20,6 +21,24 @@ function loadLocalState() {
   } catch (err) {
     return null;
   }
+}
+
+function loadCachedState() {
+  try {
+    const raw = localStorage.getItem(STATE_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function loadMergedLocalState() {
+  const cached = loadCachedState();
+  const local = loadLocalState();
+  if (!cached && !local) return {};
+  return { ...(cached || {}), ...(local || {}) };
 }
 
 function saveLocalState(next) {
@@ -283,7 +302,7 @@ function buildLocalLibraries(state, days) {
 
 export async function getState() {
   if (LOCAL_ONLY) {
-    return loadLocalState() || {};
+    return loadMergedLocalState();
   }
   const res = await fetch(buildUrl("/api/state"), { headers: authHeaders() });
   if (!res.ok) {
@@ -294,7 +313,7 @@ export async function getState() {
 
 export async function putState(payload) {
   if (LOCAL_ONLY) {
-    const current = loadLocalState() || {};
+    const current = loadMergedLocalState();
     const next = { ...current, ...payload };
     saveLocalState(next);
     return next;
@@ -312,7 +331,7 @@ export async function putState(payload) {
 
 export async function getLibraries(days = 730) {
   if (LOCAL_ONLY) {
-    return buildLocalLibraries(loadLocalState() || {}, days);
+    return buildLocalLibraries(loadMergedLocalState(), days);
   }
   const res = await fetch(buildUrl(`/api/libraries?days=${days}`), { headers: authHeaders() });
   if (!res.ok) {
