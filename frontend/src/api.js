@@ -77,28 +77,29 @@ function occurrencesForEntry(entry, startDate, days, isIncome) {
   }
 
   if (freq.includes("weekly")) {
-    let target = startDate.getDay();
+    const toMondayIndex = (date) => (date.getDay() + 6) % 7;
+    let target = toMondayIndex(startDate);
     if (typeof day === "string") {
       const weekdays = [
-        "sunday",
         "monday",
         "tuesday",
         "wednesday",
         "thursday",
         "friday",
-        "saturday"
+        "saturday",
+        "sunday"
       ];
       const idx = weekdays.indexOf(day.toLowerCase());
       if (idx >= 0) {
         target = idx;
       } else {
         const parsed = normalizeDate(day);
-        if (parsed) target = parsed.getDay();
+        if (parsed) target = toMondayIndex(parsed);
       }
     } else if (day instanceof Date) {
-      target = day.getDay();
+      target = toMondayIndex(day);
     }
-    const delta = (target - startDate.getDay() + 7) % 7;
+    const delta = (target - toMondayIndex(startDate) + 7) % 7;
     let occ = addDays(startDate, delta);
     while (occ <= end) {
       out.push({ date: occ, delta: amt * sign, name, entry });
