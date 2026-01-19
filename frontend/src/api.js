@@ -166,21 +166,29 @@ function buildLocalLibraries(state, days) {
     const payInFull =
       method === "I pay in full" || method === "I want to pay my bill in full";
     const sortedPayDates = ccPayDates.slice().sort((a, b) => a - b);
+    const ccDates = new Set(sortedPayDates.map((date) => isoDate(date)));
 
     if (payInFull) {
-      const ccDebug = computeCcBillWindows(state, days, start, paidEvents);
-      (ccDebug.payments || []).forEach((payment) => {
-        if (payment.amount > 0) {
-          const payKey = payment.date;
-          debitBills.push({ date: payKey, name: "Credit Card Bill", amount: payment.amount });
-          debitChanges.set(payKey, (debitChanges.get(payKey) || 0) - payment.amount);
-          creditChanges.set(payKey, (creditChanges.get(payKey) || 0) - payment.amount);
+      let creditRunning = Number(state?.credit_balance || 0);
+      for (let i = 0; i <= days; i += 1) {
+        const day = addDays(start, i);
+        const key = isoDate(day);
+        const dailyCredit = creditChanges.get(key) || 0;
+        creditRunning += dailyCredit;
+        if (ccDates.has(key)) {
+          const creditBeforePayment = creditRunning - dailyCredit;
+          const payAmount = Math.max(0, creditBeforePayment);
+          if (payAmount > 0) {
+            debitBills.push({ date: key, name: "Credit Card Bill", amount: payAmount });
+            debitChanges.set(key, (debitChanges.get(key) || 0) - payAmount);
+            creditChanges.set(key, (creditChanges.get(key) || 0) - payAmount);
+            creditRunning -= payAmount;
+          }
         }
-      });
+      }
     } else {
       const apr = Math.max(0, Number(state?.cc_apr_value || 0));
       const monthlyRate = apr / 100 / 12;
-      const ccDates = new Set(sortedPayDates.map((date) => isoDate(date)));
       let creditRunning = Number(state?.credit_balance || 0);
       for (let i = 0; i <= days; i += 1) {
         const day = addDays(start, i);
