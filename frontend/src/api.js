@@ -211,21 +211,51 @@ function buildLocalLibraries(state, days) {
   });
 
   if (state?.cc_pay_day !== null && state?.cc_pay_day !== undefined) {
-    const payAmount = creditCardPaymentAmount(state) || 0;
     const ccBill = {
       name: "Credit Card Bill",
-      amount: payAmount,
+      amount: creditCardPaymentAmount(state) || 0,
       frequency: "Monthly",
       day: Number(state.cc_pay_day),
-      type: "Debit"
+      type: "Debit",
+      auto: true
     };
-    occurrencesForEntry(ccBill, start, days, false).forEach((occ) => {
-      if (payAmount <= 0) return;
-      const date = isoDate(occ.date);
-      debitBills.push({ date, name: "Credit Card Bill", amount: payAmount });
-      debitChanges.set(date, (debitChanges.get(date) || 0) - payAmount);
-      creditChanges.set(date, (creditChanges.get(date) || 0) - payAmount);
-    });
+    const ccOccurrences = occurrencesForEntry(ccBill, start, days, false).map((occ) => isoDate(occ.date));
+    const ccDates = new Set(ccOccurrences);
+    const apr = Math.max(0, Number(state?.cc_apr_value || 0));
+    const monthlyRate = apr / 100 / 12;
+    let creditRunning = Number(state?.credit_balance || 0);
+    for (let i = 0; i <= days; i += 1) {
+      const day = addDays(start, i);
+      const key = isoDate(day);
+      const dailyCredit = creditChanges.get(key) || 0;
+      creditRunning += dailyCredit;
+      if (ccDates.has(key)) {
+        const baseBalance = creditRunning - dailyCredit;
+        let payAmount = creditCardPaymentAmount({
+          ...state,
+          credit_balance: baseBalance
+        }) || 0;
+        if (payAmount > baseBalance) {
+          payAmount = Math.max(0, baseBalance);
+        }
+        const remainingBase = Math.max(0, baseBalance - payAmount);
+        if (payAmount > 0) {
+          debitBills.push({ date: key, name: "Credit Card Bill", amount: payAmount });
+          debitChanges.set(key, (debitChanges.get(key) || 0) - payAmount);
+          creditChanges.set(key, (creditChanges.get(key) || 0) - payAmount);
+          creditRunning = remainingBase + dailyCredit;
+        } else {
+          creditRunning = remainingBase + dailyCredit;
+        }
+        if (monthlyRate > 0 && remainingBase > 0) {
+          const interest = Math.round(remainingBase * monthlyRate);
+          if (interest > 0) {
+            creditChanges.set(key, (creditChanges.get(key) || 0) + interest);
+            creditRunning += interest;
+          }
+        }
+      }
+    }
   }
 
   const debitBalanceSeries = [];
