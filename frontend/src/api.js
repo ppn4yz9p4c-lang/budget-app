@@ -272,6 +272,9 @@ function buildLocalLibraries(state, days) {
             sum += charge.amount;
           }
         });
+        if (!prevDate) {
+          sum += Math.max(0, Number(state?.credit_balance || 0));
+        }
         if (sum > 0) {
           const key = isoDate(payDate);
           debitBills.push({ date: key, name: "Credit Card Bill", amount: sum });
