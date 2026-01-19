@@ -153,6 +153,13 @@ function addDays(date, days) {
   return next;
 }
 
+function toDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function isSameCalendarDay(a, b) {
   if (!a || !b) return false;
   return (
@@ -714,12 +721,21 @@ export default function App() {
   const floorWarning = (() => {
     if (!debitFloorTarget) return null;
     const horizonDays = 365;
-    const horizonEnd = addDays(today, horizonDays);
-    const candidates = (libs.debit_balance_forecast || []).filter((item) => {
+    const startKey = toDateKey(today);
+    const endKey = toDateKey(addDays(today, horizonDays));
+    let candidates = (libs.debit_balance_forecast || []).filter((item) => {
+      if (!item?.date) return false;
+      if (typeof item.date === "string") {
+        return item.date >= startKey && item.date <= endKey;
+      }
       const dateObj = parseIsoDate(item.date);
       if (!dateObj) return false;
-      return dateObj >= today && dateObj <= horizonEnd;
+      const key = toDateKey(dateObj);
+      return key >= startKey && key <= endKey;
     });
+    if (candidates.length === 0) {
+      candidates = libs.debit_balance_forecast || [];
+    }
     if (candidates.length === 0) return null;
     let lowest = Number.POSITIVE_INFINITY;
     let lowestDate = null;
@@ -727,7 +743,7 @@ export default function App() {
       const value = Number(item.balance || 0);
       if (value < lowest) {
         lowest = value;
-        lowestDate = parseIsoDate(item.date);
+        lowestDate = parseIsoDate(item.date) || null;
       }
     });
     if (lowestDate && lowest < debitFloorTarget) {
