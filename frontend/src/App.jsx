@@ -893,7 +893,7 @@ export default function App() {
         name: "Loans",
         amount: 211,
         frequency: "Monthly",
-        day: 1,
+        day: 9,
         type: "Debit"
       }),
       buildBillTemplate({
