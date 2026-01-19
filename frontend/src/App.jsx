@@ -1832,15 +1832,14 @@ No bank connections required. You can change everything later.</p>
                   <p className="muted">
                     Pay dates: {(ccDebug.payDates || []).join(", ") || "None"}
                   </p>
-                  {(ccDebug.windows || []).length === 0 ? (
-                    <p className="muted">No CC bill windows found.</p>
+                  {(ccDebug.rows || []).length === 0 ? (
+                    <p className="muted">No CC bill rows found.</p>
                   ) : (
-                    (ccDebug.windows || []).map((window) => (
-                      <p key={`${window.start}-${window.end}`} className="muted">
-                        {window.start} to {window.end}: charges{" "}
-                        {formatCurrency(window.chargesTotal)} + balance{" "}
-                        {formatCurrency(window.balanceIncluded)} ={" "}
-                        {formatCurrency(window.total)}
+                    (ccDebug.rows || []).map((row) => (
+                      <p key={row.date} className="muted">
+                        {row.date}: balance {formatCurrency(row.creditBeforePayment)} + day
+                        charges {formatCurrency(row.dailyCredit)} → bill{" "}
+                        {formatCurrency(row.payAmount)}
                       </p>
                     ))
                   )}

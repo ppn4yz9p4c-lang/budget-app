@@ -131,12 +131,12 @@ function buildLocalLibraries(state, days) {
 
     if (payInFull) {
       const ccDebug = computeCcBillWindows(state, days, start);
-      (ccDebug.windows || []).forEach((window) => {
-        if (window.total > 0) {
-          const payKey = window.end;
-          debitBills.push({ date: payKey, name: "Credit Card Bill", amount: window.total });
-          debitChanges.set(payKey, (debitChanges.get(payKey) || 0) - window.total);
-          creditChanges.set(payKey, (creditChanges.get(payKey) || 0) - window.total);
+      (ccDebug.payments || []).forEach((payment) => {
+        if (payment.amount > 0) {
+          const payKey = payment.date;
+          debitBills.push({ date: payKey, name: "Credit Card Bill", amount: payment.amount });
+          debitChanges.set(payKey, (debitChanges.get(payKey) || 0) - payment.amount);
+          creditChanges.set(payKey, (creditChanges.get(payKey) || 0) - payment.amount);
         }
       });
     } else {

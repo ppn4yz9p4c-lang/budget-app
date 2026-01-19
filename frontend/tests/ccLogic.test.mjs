@@ -28,11 +28,11 @@ const result = computeCcBillWindows(state, 60, startDate);
 assert.equal(result.payDates[0], "2026-01-13");
 assert.equal(result.payDates[1], "2026-02-13");
 
-const first = result.windows[0];
-const second = result.windows[1];
+const first = result.rows[0];
+const second = result.rows[1];
 
-// Jan 5 and Jan 12 are Mondays before Jan 13: 2 * 300 = 600, plus balance 453.
-assert.equal(first.total, 1053);
+// Credit before payment on Jan 13 includes balance + Monday charges before 1/13.
+assert.equal(first.payAmount, 1053);
 
-// Next window includes 4 Mondays (Jan 19, 26, Feb 2, 9) = 1200 plus shifted monthly fee 50.
-assert.equal(second.total, 1250);
+// Credit before payment on Feb 13 includes charges after Jan 13 (including shifted fee).
+assert.equal(second.payAmount, 1250);

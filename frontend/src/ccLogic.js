@@ -141,11 +141,11 @@ function computeCcBillWindows(state, days, startDate = new Date()) {
   start.setHours(0, 0, 0, 0);
   const payDates = computeCcPayDates(start, days, state?.cc_pay_day);
   if (payDates.length === 0) {
-    return { payDates: [], windows: [], charges: [] };
+    return { payDates: [], rows: [], payments: [] };
   }
 
   const payDateSet = new Set(payDates.map((date) => isoDate(date)));
-  const charges = [];
+  const creditChanges = new Map();
   const bills = Array.isArray(state?.bills) ? state.bills : [];
   bills.forEach((bill) => {
     const type = String(bill?.type || "").trim().toLowerCase();
@@ -157,45 +157,41 @@ function computeCcBillWindows(state, days, startDate = new Date()) {
         occDate = addDays(occDate, 1);
         dateKey = isoDate(occDate);
       }
-      charges.push({
-        date: dateKey,
-        amount: Math.abs(Number(occ.delta || 0)),
-        name: occ.name || ""
-      });
+      const amount = Math.abs(Number(occ.delta || 0));
+      creditChanges.set(dateKey, (creditChanges.get(dateKey) || 0) + amount);
     });
   });
 
   const sortedPayDates = payDates.slice().sort((a, b) => a - b);
-  const windows = [];
-  const startKey = isoDate(start);
-  let prevKey = null;
-  sortedPayDates.forEach((payDate) => {
-    const payKey = isoDate(payDate);
-    let sum = 0;
-    charges.forEach((charge) => {
-      const inWindow = prevKey
-        ? charge.date >= prevKey && charge.date < payKey
-        : charge.date >= startKey && charge.date < payKey;
-      if (inWindow) {
-        sum += charge.amount;
+  const payDateKeySet = new Set(sortedPayDates.map((date) => isoDate(date)));
+  const rows = [];
+  const payments = [];
+  let creditRunning = Math.max(0, Number(state?.credit_balance || 0));
+  for (let i = 0; i <= days; i += 1) {
+    const day = addDays(start, i);
+    const key = isoDate(day);
+    const dailyCredit = creditChanges.get(key) || 0;
+    creditRunning += dailyCredit;
+    if (payDateKeySet.has(key)) {
+      const creditBeforePayment = creditRunning - dailyCredit;
+      const payAmount = Math.max(0, creditBeforePayment);
+      rows.push({
+        date: key,
+        creditBeforePayment,
+        dailyCredit,
+        payAmount
+      });
+      if (payAmount > 0) {
+        payments.push({ date: key, amount: payAmount });
+        creditRunning -= payAmount;
       }
-    });
-    const balanceIncluded = !prevKey ? Math.max(0, Number(state?.credit_balance || 0)) : 0;
-    const total = sum + balanceIncluded;
-    windows.push({
-      start: prevKey || startKey,
-      end: payKey,
-      chargesTotal: sum,
-      balanceIncluded,
-      total
-    });
-    prevKey = payKey;
-  });
+    }
+  }
 
   return {
     payDates: sortedPayDates.map((date) => isoDate(date)),
-    windows,
-    charges
+    rows,
+    payments
   };
 }
 
