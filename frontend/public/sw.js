@@ -1,12 +1,14 @@
+const CACHE_NAME = "budget-app-v1";
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open("budget-app-v1").then((cache) =>
+    caches.open(CACHE_NAME).then((cache) =>
       cache.addAll([
-        "/",
-        "/index.html",
-        "/manifest.webmanifest",
-        "/icons/icon.svg",
-        "/icons/icon-maskable.svg"
+        "./",
+        "index.html",
+        "manifest.webmanifest",
+        "icons/icon.svg",
+        "icons/icon-maskable.svg"
       ])
     )
   );
@@ -17,9 +19,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
-        keys
-          .filter((key) => key !== "budget-app-v1")
-          .map((key) => caches.delete(key))
+        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
       )
     )
   );
@@ -42,10 +42,10 @@ self.addEventListener("fetch", (event) => {
             return response;
           }
           const responseClone = response.clone();
-          caches.open("budget-app-v1").then((cache) => cache.put(event.request, responseClone));
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
           return response;
         })
-        .catch(() => caches.match("/index.html"));
+        .catch(() => caches.match("index.html"));
     })
   );
 });
