@@ -438,6 +438,13 @@ export default function App() {
 
   useEffect(() => {
     if (!state) return;
+    getLibraries(1825)
+      .then((next) => setLibs(next))
+      .catch(() => {});
+  }, [paidEvents, state]);
+
+  useEffect(() => {
+    if (!state) return;
     if (localStorage.getItem("budget_onboarding_done")) return;
     setOnboardingOpen(true);
   }, [state]);
@@ -609,13 +616,6 @@ export default function App() {
     })
   }));
 
-  const paidDebitAdjustments = new Map();
-  const paidCreditAdjustments = new Map();
-  const addAdjustment = (map, date, delta) => {
-    if (!delta) return;
-    map.set(date, (map.get(date) || 0) + delta);
-  };
-
   let paidAwareTotalIncome = 0;
   let paidAwareTotalBills = 0;
   cashflowEventsWithKeys.forEach((event) => {
@@ -626,42 +626,10 @@ export default function App() {
       } else if (event.item !== "Credit Card Bill") {
         paidAwareTotalBills += event.amount;
       }
-    } else if (event.isIncome) {
-      addAdjustment(paidDebitAdjustments, event.date, -event.amount);
-    } else if (event.type === "Debit") {
-      addAdjustment(paidDebitAdjustments, event.date, event.amount);
-    } else if (event.type === "Credit") {
-      addAdjustment(paidCreditAdjustments, event.date, -event.amount);
     }
   });
 
   const paidAwareNet = paidAwareTotalIncome - paidAwareTotalBills;
-  const paidBalanceDates = new Set([
-    ...debitBalanceMap.keys(),
-    ...creditBalanceMap.keys(),
-    ...cashflowEventsWithKeys.map((event) => event.date)
-  ]);
-  const paidBalanceDateList = Array.from(paidBalanceDates).sort();
-  let paidDebitAdjRunning = 0;
-  let paidCreditAdjRunning = 0;
-  const paidDebitBalanceMap = new Map();
-  const paidCreditBalanceMap = new Map();
-  paidBalanceDateList.forEach((dateKey) => {
-    paidDebitAdjRunning += paidDebitAdjustments.get(dateKey) || 0;
-    paidCreditAdjRunning += paidCreditAdjustments.get(dateKey) || 0;
-    const baseDebit = debitBalanceMap.get(dateKey) ?? debitBalance;
-    const baseCredit = creditBalanceMap.get(dateKey) ?? creditBalance;
-    paidDebitBalanceMap.set(dateKey, baseDebit + paidDebitAdjRunning);
-    paidCreditBalanceMap.set(dateKey, baseCredit + paidCreditAdjRunning);
-  });
-  let paidLowestBalance = debitBalance;
-  let paidLowestDate = cashflowStart;
-  paidDebitBalanceMap.forEach((balance, dateString) => {
-    if (balance < paidLowestBalance) {
-      paidLowestBalance = balance;
-      paidLowestDate = parseIsoDate(dateString) || cashflowStart;
-    }
-  });
 
   const graphEndDate = state.graph_end_date
     ? parseIsoDate(state.graph_end_date)
@@ -1710,7 +1678,7 @@ No bank connections required. You can change everything later.</p>
                 </div>
               </div>
               <p className="muted">
-                Lowest Balance: {formatDateShort(paidLowestDate)} - {formatCurrency(paidLowestBalance)}
+                Lowest Balance: {formatDateShort(lowestDate)} - {formatCurrency(lowestBalance)}
               </p>
             </div>
 
@@ -1747,8 +1715,8 @@ No bank connections required. You can change everything later.</p>
                               ? "Tomorrow"
                               : formatDateShort(dateObj)
                           : ev.date;
-                        const debitBal = paidDebitBalanceMap.get(ev.date) ?? debitBalance;
-                        const creditBal = paidCreditBalanceMap.get(ev.date) ?? creditBalance;
+                        const debitBal = debitBalanceMap.get(ev.date) ?? debitBalance;
+                        const creditBal = creditBalanceMap.get(ev.date) ?? creditBalance;
                         const paidClass = isPaid ? "paid-cell" : "";
                         return (
                           <tr
