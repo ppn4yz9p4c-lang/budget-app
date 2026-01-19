@@ -11,8 +11,9 @@ services:
     envVars:
       - key: DATABASE_URL
         value: sqlite:////var/data/budget_app.db
-  - type: static
+  - type: web
     name: budget-app-web
+    env: static
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
     envVars:
