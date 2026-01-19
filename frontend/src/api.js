@@ -205,13 +205,33 @@ function buildLocalLibraries(state, days) {
   const debitChanges = new Map();
   const creditChanges = new Map();
   const incomeChanges = new Map();
+  const creditChargeOccurrences = [];
+
+  const ccPayDates = [];
+  if (state?.cc_pay_day !== null && state?.cc_pay_day !== undefined) {
+    const schedule = {
+      frequency: "Monthly",
+      day: Number(state.cc_pay_day),
+      name: "Credit Card Bill",
+      amount: 0
+    };
+    occurrencesForEntry(schedule, start, days, false).forEach((occ) => {
+      ccPayDates.push(occ.date);
+    });
+  }
+  const ccPayDateSet = new Set(ccPayDates.map((date) => isoDate(date)));
 
   const bills = Array.isArray(state?.bills) ? state.bills : [];
   bills.forEach((bill) => {
     const type = String(bill?.type || "").trim().toLowerCase();
     const isDebit = type === "debit";
     occurrencesForEntry(bill, start, days, false).forEach((occ) => {
-      const date = isoDate(occ.date);
+      let occDate = occ.date;
+      let date = isoDate(occDate);
+      if (!isDebit && ccPayDateSet.has(date)) {
+        occDate = addDays(occDate, 1);
+        date = isoDate(occDate);
+      }
       const amount = Math.abs(Number(occ.delta || 0));
       const entry = { date, name: occ.name || "", amount };
       if (isDebit) {
@@ -220,6 +240,7 @@ function buildLocalLibraries(state, days) {
       } else {
         creditBills.push(entry);
         creditChanges.set(date, (creditChanges.get(date) || 0) + Number(occ.delta || 0));
+        creditChargeOccurrences.push({ date: occDate, amount });
       }
     });
   });
@@ -233,48 +254,66 @@ function buildLocalLibraries(state, days) {
     });
   });
 
-  if (state?.cc_pay_day !== null && state?.cc_pay_day !== undefined) {
-    const ccBill = {
-      name: "Credit Card Bill",
-      amount: creditCardPaymentAmount(state) || 0,
-      frequency: "Monthly",
-      day: Number(state.cc_pay_day),
-      type: "Debit",
-      auto: true
-    };
-    const ccOccurrences = occurrencesForEntry(ccBill, start, days, false).map((occ) => isoDate(occ.date));
-    const ccDates = new Set(ccOccurrences);
-    const apr = Math.max(0, Number(state?.cc_apr_value || 0));
-    const monthlyRate = apr / 100 / 12;
-    let creditRunning = Number(state?.credit_balance || 0);
-    for (let i = 0; i <= days; i += 1) {
-      const day = addDays(start, i);
-      const key = isoDate(day);
-      const dailyCredit = creditChanges.get(key) || 0;
-      creditRunning += dailyCredit;
-      if (ccDates.has(key)) {
-        const baseBalance = creditRunning - dailyCredit;
-        let payAmount = creditCardPaymentAmount({
-          ...state,
-          credit_balance: baseBalance
-        }) || 0;
-        if (payAmount > baseBalance) {
-          payAmount = Math.max(0, baseBalance);
+  if (ccPayDates.length > 0) {
+    const method = state?.cc_pay_method_value || "I want to pay my bill in full";
+    const payInFull =
+      method === "I pay in full" || method === "I want to pay my bill in full";
+    const sortedPayDates = ccPayDates.slice().sort((a, b) => a - b);
+
+    if (payInFull) {
+      let prevDate = null;
+      sortedPayDates.forEach((payDate) => {
+        let sum = 0;
+        creditChargeOccurrences.forEach((charge) => {
+          if (
+            (prevDate ? charge.date > prevDate : charge.date >= start) &&
+            charge.date <= payDate
+          ) {
+            sum += charge.amount;
+          }
+        });
+        if (sum > 0) {
+          const key = isoDate(payDate);
+          debitBills.push({ date: key, name: "Credit Card Bill", amount: sum });
+          debitChanges.set(key, (debitChanges.get(key) || 0) - sum);
+          creditChanges.set(key, (creditChanges.get(key) || 0) - sum);
         }
-        const remainingBase = Math.max(0, baseBalance - payAmount);
-        if (payAmount > 0) {
-          debitBills.push({ date: key, name: "Credit Card Bill", amount: payAmount });
-          debitChanges.set(key, (debitChanges.get(key) || 0) - payAmount);
-          creditChanges.set(key, (creditChanges.get(key) || 0) - payAmount);
-          creditRunning = remainingBase + dailyCredit;
-        } else {
-          creditRunning = remainingBase + dailyCredit;
-        }
-        if (monthlyRate > 0 && remainingBase > 0) {
-          const interest = Math.round(remainingBase * monthlyRate);
-          if (interest > 0) {
-            creditChanges.set(key, (creditChanges.get(key) || 0) + interest);
-            creditRunning += interest;
+        prevDate = payDate;
+      });
+    } else {
+      const apr = Math.max(0, Number(state?.cc_apr_value || 0));
+      const monthlyRate = apr / 100 / 12;
+      const ccDates = new Set(sortedPayDates.map((date) => isoDate(date)));
+      let creditRunning = Number(state?.credit_balance || 0);
+      for (let i = 0; i <= days; i += 1) {
+        const day = addDays(start, i);
+        const key = isoDate(day);
+        const dailyCredit = creditChanges.get(key) || 0;
+        creditRunning += dailyCredit;
+        if (ccDates.has(key)) {
+          const baseBalance = creditRunning - dailyCredit;
+          let payAmount = creditCardPaymentAmount({
+            ...state,
+            credit_balance: baseBalance
+          }) || 0;
+          if (payAmount > baseBalance) {
+            payAmount = Math.max(0, baseBalance);
+          }
+          const remainingBase = Math.max(0, baseBalance - payAmount);
+          if (payAmount > 0) {
+            debitBills.push({ date: key, name: "Credit Card Bill", amount: payAmount });
+            debitChanges.set(key, (debitChanges.get(key) || 0) - payAmount);
+            creditChanges.set(key, (creditChanges.get(key) || 0) - payAmount);
+            creditRunning = remainingBase + dailyCredit;
+          } else {
+            creditRunning = remainingBase + dailyCredit;
+          }
+          if (monthlyRate > 0 && remainingBase > 0) {
+            const interest = Math.round(remainingBase * monthlyRate);
+            if (interest > 0) {
+              creditChanges.set(key, (creditChanges.get(key) || 0) + interest);
+              creditRunning += interest;
+            }
           }
         }
       }
@@ -400,7 +439,7 @@ export async function loginUser(payload) {
 
 export async function getSafeToSpend(days) {
   if (LOCAL_ONLY) {
-    const libs = buildLocalLibraries(loadLocalState() || {}, days);
+    const libs = buildLocalLibraries(loadMergedLocalState(), days);
     const balances = (libs.debit_balance_forecast || []).map((row) => Number(row.balance || 0));
     const min = balances.length ? Math.min(...balances) : 0;
     return { safe_to_spend: Number(min || 0), days };
