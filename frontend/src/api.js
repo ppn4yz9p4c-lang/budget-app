@@ -13,6 +13,86 @@ const LOCAL_STATE_KEY = "budget_local_state";
 const STATE_CACHE_KEY = "budget_state_cache";
 const PAID_EVENTS_KEY = "budget_paid_events";
 
+function isDailyExpenseName(name) {
+  const label = String(name || "").trim().toLowerCase();
+  const normalized = label.replace(/[^a-z]/g, "");
+  return (
+    normalized === "misc" ||
+    normalized === "miscellaneous" ||
+    normalized === "dailyexpense" ||
+    normalized === "dailyexpenses"
+  );
+}
+
+function normalizeDailyExpenseFrequency(frequency, dayHint) {
+  const freq = String(frequency || "").trim().toLowerCase();
+  if (freq.includes("week")) return "weekly";
+  if (freq.includes("month")) return "monthly";
+  const dayLabel = String(dayHint || "").toLowerCase();
+  if (
+    [
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+      "sunday"
+    ].some((name) => dayLabel.includes(name))
+  ) {
+    return "weekly";
+  }
+  if (/^\d{1,2}$/.test(dayLabel)) return "monthly";
+  return "weekly";
+}
+
+function computeDailyExpenseAmount(amount, frequency, dayHint) {
+  const base = Number(amount || 0);
+  const normalized = normalizeDailyExpenseFrequency(frequency, dayHint);
+  if (normalized === "monthly") return base / 30.4167;
+  return base / 7;
+}
+
+function isDailyExpenseName(name) {
+  const label = String(name || "").trim().toLowerCase();
+  const normalized = label.replace(/[^a-z]/g, "");
+  return (
+    normalized === "misc" ||
+    normalized === "miscellaneous" ||
+    normalized === "dailyexpense" ||
+    normalized === "dailyexpenses"
+  );
+}
+
+function normalizeDailyExpenseFrequency(frequency, dayHint) {
+  const freq = String(frequency || "").trim().toLowerCase();
+  if (freq.includes("week")) return "weekly";
+  if (freq.includes("month")) return "monthly";
+  const dayLabel = String(dayHint || "").toLowerCase();
+  if (
+    [
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+      "sunday"
+    ].some((name) => dayLabel.includes(name))
+  ) {
+    return "weekly";
+  }
+  if (/^\d{1,2}$/.test(dayLabel)) return "monthly";
+  return "weekly";
+}
+
+function computeDailyExpenseAmount(amount, frequency, dayHint) {
+  const base = Number(amount || 0);
+  const normalized = normalizeDailyExpenseFrequency(frequency, dayHint);
+  if (normalized === "monthly") return base / 30.4167;
+  return base / 7;
+}
+
 function buildUrl(path) {
   if (!API_BASE) return path;
   return `${API_BASE.replace(/\/$/, "")}${path}`;
@@ -276,9 +356,13 @@ export async function putState(payload) {
   return res.json();
 }
 
-export async function getLibraries(days = 730) {
+export async function getLibraries(days = 730, stateOverride = null) {
   if (LOCAL_ONLY) {
-    return buildLocalLibraries(loadMergedLocalState(), days);
+    const base =
+      stateOverride && typeof stateOverride === "object"
+        ? stateOverride
+        : loadMergedLocalState();
+    return buildLocalLibraries(base, days);
   }
   const res = await fetch(buildUrl(`/api/libraries?days=${days}`), { headers: authHeaders() });
   if (!res.ok) {

@@ -134,6 +134,23 @@ function formatTooltipDate(value) {
   return date.toLocaleDateString("en-US");
 }
 
+function GraphTooltip({ active, payload, label }) {
+  if (!active || !payload || payload.length === 0) return null;
+  const rows = payload.filter((item) => item && typeof item.value === "number");
+  if (rows.length === 0) return null;
+  return (
+    <div className="graph-tooltip">
+      <div className="graph-tooltip-date">{formatTooltipDate(label)}</div>
+      {rows.map((item) => (
+        <div key={item.dataKey} className="graph-tooltip-row">
+          <span className="graph-tooltip-name">{item.name}</span>
+          <span className="graph-tooltip-value">{formatCurrency(item.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function formatCurrency(value) {
   const num = Number(value || 0);
   return new Intl.NumberFormat("en-US", {
@@ -393,7 +410,7 @@ export default function App() {
         }
       }
       try {
-        libraries = await getLibraries(1825);
+        libraries = await getLibraries(1825, nextState);
       } catch (err) {
         console.error("Failed to load libraries.", err);
       }
@@ -445,7 +462,7 @@ export default function App() {
 
   useEffect(() => {
     if (!state) return;
-    getLibraries(1825)
+    getLibraries(1825, state)
       .then((next) => setLibs(next))
       .catch(() => {});
   }, [paidEvents, state]);
@@ -481,7 +498,7 @@ export default function App() {
     const saved = await putState(patch);
     saveCachedState(saved);
     setState(saved);
-    const libraries = await getLibraries(1825);
+    const libraries = await getLibraries(1825, saved || state);
     setLibs(libraries);
   }
 
@@ -507,7 +524,7 @@ export default function App() {
           console.log("[save] done");
         }
       });
-      const libraries = await getLibraries(1825);
+      const libraries = await getLibraries(1825, state);
       setLibs(libraries);
       return saved;
     } catch (err) {
@@ -528,6 +545,7 @@ export default function App() {
   const budgets = state.budgets || [];
   const accounts = state.accounts || [];
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   const cashflowStart = new Date();
   cashflowStart.setHours(0, 0, 0, 0);
@@ -645,7 +663,7 @@ export default function App() {
 
   const graphDateList = [];
   const graphData = [];
-  const endDate = graphEndDate || new Date();
+  const endDate = graphEndDate || new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
   const daysDiff = Math.max(0, Math.floor((endDate - today) / (24 * 60 * 60 * 1000)));
   for (let i = 0; i <= daysDiff; i += 1) {
     const date = new Date(today);
@@ -660,7 +678,7 @@ export default function App() {
     (libs.credit_balance_forecast || []).map((item) => [item.date, Number(item.balance || 0)])
   );
   graphDateList.forEach((date) => {
-    const iso = date.toISOString().slice(0, 10);
+    const iso = toDateKey(date);
     const row = { date: iso };
     if (graphView === "Debit" || graphView === "Both") {
       row.debit = debitMap.get(iso) ?? debitBalance;
@@ -794,9 +812,9 @@ export default function App() {
       id: entry.id || `bill_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     };
     payload.amount = Number(payload.amount || 0);
-    if (payload.frequency === "Monthly") {
-      payload.day = payload.day === "" || payload.day === null ? 1 : Number(payload.day);
-    }
+      if (payload.frequency === "Monthly" && !isMiscName(payload.name)) {
+        payload.day = payload.day === "" || payload.day === null ? 1 : Number(payload.day);
+      }
     const next = (state?.bills || []).concat(payload);
     await commitState({ bills: next }, "onboarding_bill");
   }
@@ -1819,7 +1837,7 @@ No bank connections required. You can change everything later.</p>
                 Date Forecasted Until
                 <input
                   type="date"
-                  value={(graphEndDate || new Date()).toISOString().slice(0, 10)}
+                  value={state.graph_end_date || toDateKey(graphEndDate || addDays(today, 30))}
                   onChange={(e) => updateState({ graph_end_date: e.target.value })}
                 />
               </label>
@@ -1829,10 +1847,7 @@ No bank connections required. You can change everything later.</p>
                 <LineChart data={graphData}>
                   <XAxis dataKey="date" tickFormatter={formatAxisDate} />
                   <YAxis tickFormatter={formatCurrency} />
-                  <Tooltip
-                    formatter={(value, name) => [formatCurrency(value), name]}
-                    labelFormatter={formatTooltipDate}
-                  />
+                  <Tooltip content={<GraphTooltip />} />
                   <Legend />
                   {(graphView === "Debit" || graphView === "Both") && (
                     <Line type="monotone" dataKey="debit" name="Debit" stroke="#2f855a" dot={false} />
@@ -1948,7 +1963,7 @@ No bank connections required. You can change everything later.</p>
                 onChange={(value) => setBillModal({ ...billModal, frequency: value })}
               />
             </label>
-            {billModal.frequency === "Weekly" && (
+            {billModal.frequency === "Weekly" && !(billModal.name && isMiscName(billModal.name)) && (
               <label>
                 Day of the Week
                 <select
@@ -1963,7 +1978,7 @@ No bank connections required. You can change everything later.</p>
                 </select>
               </label>
             )}
-            {billModal.frequency === "Monthly" && (
+            {billModal.frequency === "Monthly" && !(billModal.name && isMiscName(billModal.name)) && (
               <label>
                 Day of the Month
                 <input
@@ -1977,7 +1992,7 @@ No bank connections required. You can change everything later.</p>
                 />
               </label>
             )}
-            {billModal.frequency === "Biweekly" && (
+            {billModal.frequency === "Biweekly" && !(billModal.name && isMiscName(billModal.name)) && (
               <label>
                 Anchor Date
                 <input
@@ -1989,7 +2004,8 @@ No bank connections required. You can change everything later.</p>
                 />
               </label>
             )}
-            {(billModal.frequency === "Annually" || billModal.frequency === "One-time") && (
+            {(billModal.frequency === "Annually" || billModal.frequency === "One-time") &&
+              !(billModal.name && isMiscName(billModal.name)) && (
               <label>
                 Date
                 <input

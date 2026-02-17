@@ -188,6 +188,49 @@ td {
   height: 360px;
 }
 
+.graph-tooltip {
+  max-width: min(280px, 75vw);
+  background: #ffffff;
+  border: 1px solid #d4dbe3;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  padding: 10px 12px;
+  color: #111827;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.graph-tooltip-date {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.graph-tooltip-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.graph-tooltip-row + .graph-tooltip-row {
+  margin-top: 6px;
+}
+
+.graph-tooltip-name {
+  color: #374151;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.graph-tooltip-value {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
