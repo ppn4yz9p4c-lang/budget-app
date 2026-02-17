@@ -1,0 +1,48 @@
+name: Railway Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.RAILWAY_TOKEN != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
+          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+          RAILWAY_DEPLOY_PATH: ${{ vars.RAILWAY_DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          ARGS=(--ci --detach)
+          if [ -n "${RAILWAY_PROJECT_ID:-}" ]; then
+            ARGS+=(--project "$RAILWAY_PROJECT_ID")
+          fi
+          if [ -n "${RAILWAY_ENVIRONMENT_ID:-}" ]; then
+            ARGS+=(--environment "$RAILWAY_ENVIRONMENT_ID")
+          fi
+          if [ -n "${RAILWAY_SERVICE_ID:-}" ]; then
+            ARGS+=(--service "$RAILWAY_SERVICE_ID")
+          fi
+          if [ -n "${RAILWAY_DEPLOY_PATH:-}" ]; then
+            railway up "${ARGS[@]}" "$RAILWAY_DEPLOY_PATH"
+          else
+            railway up "${ARGS[@]}"
+          fi
