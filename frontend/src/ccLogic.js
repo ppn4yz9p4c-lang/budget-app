@@ -33,7 +33,7 @@ function occurrencesForEntry(entry, startDate, days, isIncome) {
   const name = entry?.name || "";
   const amt = Number(entry?.amount || 0);
   const typ = String(entry?.type || "").trim().toLowerCase();
-  const sign = isIncome ? 1 : typ === "debit" ? -1 : 1;
+  const sign = isIncome ? 1 : typ === "credit" ? 1 : -1;
   const day = entry?.day;
 
   if (freq.includes("biweekly")) {
@@ -153,7 +153,7 @@ function computeCcBillWindows(state, days, startDate = new Date(), paidEvents = 
   const bills = Array.isArray(state?.bills) ? state.bills : [];
   bills.forEach((bill) => {
     const type = String(bill?.type || "").trim().toLowerCase();
-    if (type === "debit") return;
+    if (type !== "credit") return;
     occurrencesForEntry(bill, start, days, false).forEach((occ) => {
       let occDate = occ.date;
       let dateKey = isoDate(occDate);

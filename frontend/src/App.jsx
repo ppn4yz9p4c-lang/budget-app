@@ -116,6 +116,13 @@ function ordinal(n) {
 
 function parseIsoDate(value) {
   if (!value) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  if (typeof value === "number") {
+    const numericDate = new Date(value);
+    return Number.isNaN(numericDate.getTime()) ? null : numericDate;
+  }
   const date = new Date(`${value}T00:00:00`);
   return Number.isNaN(date.getTime()) ? null : date;
 }
@@ -656,14 +663,16 @@ export default function App() {
 
   const paidAwareNet = paidAwareTotalIncome - paidAwareTotalBills;
 
-  const graphEndDate = state.graph_end_date
+  const requestedGraphEndDate = state.graph_end_date
     ? parseIsoDate(state.graph_end_date)
     : new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const graphEndDate =
+    requestedGraphEndDate && requestedGraphEndDate >= today ? requestedGraphEndDate : today;
   const graphView = state.graph_view_type || "Both";
 
   const graphDateList = [];
   const graphData = [];
-  const endDate = graphEndDate || new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const endDate = graphEndDate || today;
   const daysDiff = Math.max(0, Math.floor((endDate - today) / (24 * 60 * 60 * 1000)));
   for (let i = 0; i <= daysDiff; i += 1) {
     const date = new Date(today);
@@ -679,7 +688,7 @@ export default function App() {
   );
   graphDateList.forEach((date) => {
     const iso = toDateKey(date);
-    const row = { date: iso };
+    const row = { date: iso, dateTs: date.getTime() };
     if (graphView === "Debit" || graphView === "Both") {
       row.debit = debitMap.get(iso) ?? debitBalance;
     }
@@ -1845,9 +1854,18 @@ No bank connections required. You can change everything later.</p>
             <div className="card chart">
               <ResponsiveContainer width="100%" height={320}>
                 <LineChart data={graphData}>
-                  <XAxis dataKey="date" tickFormatter={formatAxisDate} />
+                  <XAxis
+                    dataKey="dateTs"
+                    type="number"
+                    domain={[today.getTime(), endDate.getTime()]}
+                    tickFormatter={formatAxisDate}
+                  />
                   <YAxis tickFormatter={formatCurrency} />
-                  <Tooltip content={<GraphTooltip />} />
+                  <Tooltip
+                    content={<GraphTooltip />}
+                    allowEscapeViewBox={{ x: true, y: true }}
+                    wrapperStyle={{ zIndex: 20 }}
+                  />
                   <Legend />
                   {(graphView === "Debit" || graphView === "Both") && (
                     <Line type="monotone" dataKey="debit" name="Debit" stroke="#2f855a" dot={false} />

@@ -24,7 +24,7 @@ def occurrences_for_entry(entry: Dict[str, Any], start_date: dt.date, days: int,
     name = entry.get("name", "")
     amt = int(entry.get("amount", 0))
     typ = (entry.get("type") or "").strip().lower()
-    sign = 1 if is_income else (-1 if typ == "debit" else 1)
+    sign = 1 if is_income else (1 if typ == "credit" else -1)
     day = entry.get("day")
 
     if "biweekly" in freq:
@@ -182,7 +182,7 @@ def build_upcoming_libraries(db: Session, user_id: int, days: int = 1825) -> Dic
         if bill.get("auto"):
             continue
         typ = str(bill.get("type") or "").strip().lower()
-        is_debit = typ == "debit"
+        is_debit = typ != "credit"
         for occ_date, amt, name, _ in occurrences_for_entry(bill, start, days, is_income=False):
             entry = {"date": occ_date, "name": name, "amount": abs(int(amt))}
             if is_debit:

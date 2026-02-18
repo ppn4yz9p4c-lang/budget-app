@@ -183,7 +183,7 @@ function buildLocalLibraries(state, days) {
   const bills = Array.isArray(state?.bills) ? state.bills : [];
   bills.forEach((bill) => {
     const type = String(bill?.type || "").trim().toLowerCase();
-    const isDebit = type === "debit";
+    const isDebit = type !== "credit";
     occurrencesForEntry(bill, start, days, false).forEach((occ) => {
       const date = isoDate(occ.date);
       const amount = Math.abs(Number(occ.delta || 0));
