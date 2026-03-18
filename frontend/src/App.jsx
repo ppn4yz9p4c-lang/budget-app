@@ -2323,3 +2323,38 @@ No bank connections required. You can change everything later.</p>
     </div>
   );
 }
+    if (
+      (chatScriptState?.scenario == "t1" && chatScriptState.step <= 1) ||
+      (!chatScriptState && (intent.showMonth || intent.markRentPaid))
+    ) {
+      if (intent.showMonth || intent.markRentPaid || intent.confirmYes) {
+        const monthEntries = buildUpcomingList(new Date(), 31, "bill");
+        const monthList = monthEntries
+          .map((entry) => ${entry.name} on )
+          .join(", ");
+        let rentMarked = false;
+        if (intent.markRentPaid) {
+          const rentMatch = getNextEntryByName(billsTable, "rent", false);
+          if (rentMatch) {
+            const paidKey = buildPaidKey({
+              sourceId: rentMatch.entry.id || "",
+              name: rentMatch.entry.name,
+              date: rentMatch.date,
+              type: rentMatch.entry.type || "Debit",
+              amount: Math.abs(Number(rentMatch.entry.amount || 0))
+            });
+            setPaidEvents((prev) => ({ ...(prev || {}), [paidKey]: true }));
+            rentMarked = true;
+          }
+        }
+        setChatScriptState({ scenario: "t1", step: 2 });
+        setChatInput("");
+        await streamAssistantText(
+          rentMarked
+            ? On it. In addition to those, you'll have . I marked rent as paid.
+            : On it. In addition to those, you'll have .
+        );
+        return;
+      }
+    }
+}
